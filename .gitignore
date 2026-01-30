@@ -6,7 +6,7 @@ venv/
 .venv/
 .conda/
 src.egg-info/
-*__init__.py
+#*__init__.py
 .pytest_cache
 
 # --- Python ---
