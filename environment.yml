@@ -1,0 +1,21 @@
+name: sys-recomendations-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10.10
+  - numpy
+  - pandas
+  - scikit-learn
+  - jupyterlab
+  - ipython
+  - nltk # remove words with not provide information to recomend
+  - matplotlib
+  - dvc 
+  - jedi
+  - python-dotenv
+  - pytest
+  - pip
+  - pip:
+      # Aquí van los paquetes que solo existen en pip
+    - "dvc[s3]"   # si usarás AWS S3

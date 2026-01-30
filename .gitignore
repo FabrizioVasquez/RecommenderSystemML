@@ -1,0 +1,43 @@
+# --- Entornos Virtuales ---
+# .gitignore
+sys-recomendations-env/
+    env/
+venv/
+.venv/
+.conda/
+src.egg-info/
+*__init__.py
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# --- Jupyter ---
+.ipynb_checkpoints
+
+# --- DVC y Datos (LO IMPORTANTE) ---
+# Ignoramos los datos crudos y los modelos
+/data/*
+/artifacts/*
+
+# PERO NO ignoramos los archivos de rastreo de DVC
+!/data/*.dvc
+!/artifacts/*.dvc
+!.dvcignore
+
+# Ignoramos el caché interno de DVC (esto ocupa mucho espacio)
+.dvc/cache/
+.dvc/tmp/
+.dvc/url
+
+# --- Sistema y Logs ---
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# --- Secretos ---
+.env
