@@ -1,68 +1,77 @@
-name: Deploy MLE Project to AWS
+name: Deploy MLE Project to AWS (Ohio)
 
+# 1. EL DISPARADOR (TRIGGER)
+# Este pipeline se activará solo cuando hagas un 'git push' a la rama 'main'.
 on:
   push:
     branches:
-      - main  # Se ejecuta cada vez que haces push a main
+      - main
 
+# 2. LOS TRABAJOS (JOBS)
 jobs:
-  integration-and-delivery:
-    runs-on: ubuntu-latest
+  build-and-deploy:
+    runs-on: ubuntu-latest  # Usamos una máquina Linux virtual de GitHub
     
     steps:
-    # 1. Bajar código
+    # --- FASE 1: PREPARACIÓN (CI) ---
+    
+    # 1. Descargar tu código del repositorio
     - name: Checkout Code
       uses: actions/checkout@v3
 
-    # 2. Configurar Python
+    # 2. Instalar Python 3.10
     - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    # 3. Instalar dependencias (para correr tests)
+    # 3. Instalar librerías (incluyendo dvc[s3] y pytest)
     - name: Install Dependencies
       run: |
-        pip install --upgrade pip
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest
 
-    # 4. Configurar Credenciales AWS (Necesario para DVC y ECR)
+    # 4. Autenticarse en AWS (Usando tus secretos de GitHub)
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-2
+        aws-region: us-east-2  # <--- IMPORTANTE: Tu región (Ohio)
 
-    # 5. Descargar Datos y Modelos con DVC
-    # DVC usa las credenciales configuradas arriba automáticamente via boto3
-    - name: Pull Data from S3 (DVC)
+    # 5. Descargar Datos y Modelos desde S3 usando DVC
+    # DVC usa las credenciales configuradas en el paso anterior automáticamente.
+    - name: Pull Data from DVC
       run: |
         dvc pull
 
-    # 6. Correr Tests Automatizados
-    # Si esto falla, el deploy se detiene aquí.
+    # 6. Ejecutar Tests Automatizados
+    # Si los tests fallan, el proceso se detiene aquí y no despliega nada.
     - name: Run Unit Tests
+      env:
+        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       run: |
         pytest tests/
 
-    # 7. Login en Amazon ECR (Solo si los tests pasaron)
+    # --- FASE 2: DESPLIEGUE (CD) ---
+
+    # 7. Iniciar sesión en AWS ECR (Tu garaje de imágenes)
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    # 8. Construir, Etiquetar y Subir imagen a AWS ECR
-    - name: Build, Tag, and Push Image to ECR
+    # 8. Construir la imagen Docker y subirla a AWS
+    - name: Build, Tag, and Push Image to Amazon ECR
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: movies-recsys   # ASEGÚRATE QUE ESTE NOMBRE COINCIDA CON EL QUE CREASTE EN AWS
+        ECR_REPOSITORY: movies-recsys  # Nombre exacto del repo en AWS ECR
         IMAGE_TAG: latest
       run: |
-        # Construir la imagen (Dockerfile ejecutará el entrenamiento si así lo definiste)
+        # Construir imagen
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         
-        # Subir a AWS
+        # Subir imagen
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         
-        echo " Imagen subida exitosamente a ECR."
+        echo "Imagen desplegada exitosamente en ECR."

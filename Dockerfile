@@ -1,28 +1,31 @@
-# Usamos Python 3.10 Slim (más ligero que la imagen completa)
+# Imagen base ligera
 FROM python:3.10-slim
 
-# Evita archivos temporales y logs en buffer
+# Evitar archivos basura de python
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Directorio de trabajo
 WORKDIR /app
 
-# 1. Instalar dependencias del sistema y librerías Python
+# Instalar dependencias del sistema (gcc a veces es necesario para ciertas libs)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Instalar librerías Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 2. Descargar corpora de NLTK (solución al error común de "Resource not found")
-RUN python -m nltk.downloader punkt stopwords wordnet
-
-# 3. Copiar código y datos
-# NOTA: Docker necesita los CSV para entrenar. Asegúrate de que no estén en .dockerignore
+# Copiar el código fuente
 COPY . .
 
-# 4. ENTRENAMIENTO AUTOMÁTICO (Build-time training)
-# Esto crea los .pkl dentro de la imagen
-RUN python src/models/train.py
+# NOTA: Los modelos .pkl deben estar ya en la carpeta artifacts/
+# GitHub Actions se encarga de ponerlos ahí con 'dvc pull' antes de este paso.
 
-# 5. Configuración de Streamlit
+# Exponer el puerto de Streamlit
 EXPOSE 8501
+
+# Chequeo de salud (Opcional, ayuda a AWS a saber si la app vive)
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
+
+# Comando de arranque
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
