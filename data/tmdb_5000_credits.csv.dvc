@@ -1,0 +1,5 @@
+outs:
+- md5: 6c5e0e12bfbc527697d7977d86b97ed4
+  size: 40044293
+  hash: md5
+  path: tmdb_5000_credits.csv
