@@ -3,6 +3,5 @@ pandas
 scikit-learn
 nltk
 streamlit
-hydra-core
-dvc[s3]
 boto3
+python-dotenv
