@@ -7,6 +7,8 @@ venv/
 .conda/
 src.egg-info/
 *__init__.py
+.pytest_cache
+
 # --- Python ---
 __pycache__/
 *.pyc
