@@ -1,0 +1,68 @@
+name: Deploy MLE Project to AWS
+
+on:
+  push:
+    branches:
+      - main  # Se ejecuta cada vez que haces push a main
+
+jobs:
+  integration-and-delivery:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 1. Bajar código
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # 2. Configurar Python
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    # 3. Instalar dependencias (para correr tests)
+    - name: Install Dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+
+    # 4. Configurar Credenciales AWS (Necesario para DVC y ECR)
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-2
+
+    # 5. Descargar Datos y Modelos con DVC
+    # DVC usa las credenciales configuradas arriba automáticamente via boto3
+    - name: Pull Data from S3 (DVC)
+      run: |
+        dvc pull
+
+    # 6. Correr Tests Automatizados
+    # Si esto falla, el deploy se detiene aquí.
+    - name: Run Unit Tests
+      run: |
+        pytest tests/
+
+    # 7. Login en Amazon ECR (Solo si los tests pasaron)
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    # 8. Construir, Etiquetar y Subir imagen a AWS ECR
+    - name: Build, Tag, and Push Image to ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: movies-recsys   # ASEGÚRATE QUE ESTE NOMBRE COINCIDA CON EL QUE CREASTE EN AWS
+        IMAGE_TAG: latest
+      run: |
+        # Construir la imagen (Dockerfile ejecutará el entrenamiento si así lo definiste)
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        
+        # Subir a AWS
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        
+        echo " Imagen subida exitosamente a ECR."
