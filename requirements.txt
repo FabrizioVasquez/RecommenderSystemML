@@ -8,4 +8,4 @@ python-dotenv
 fastapi 
 uvicorn
 mlflow>=2.3.0
-dagshub
+#dagshub
