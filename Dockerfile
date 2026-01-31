@@ -1,31 +1,35 @@
-# Imagen base ligera
+# Usamos una imagen base MUY ligera para ahorrar RAM en Render
 FROM python:3.10-slim
 
-# Evitar archivos basura de python
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Instalar dependencias del sistema (gcc a veces es necesario para ciertas libs)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Instalar dependencias del sistema mínimas
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instalar librerías Python
+# Instalar dependencias de Python
 COPY requirements.txt .
+# Asegúrate de que en requirements.txt esté: dvc[s3]
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el código fuente
+# Copiar el código
 COPY . .
 
-# NOTA: Los modelos .pkl deben estar ya en la carpeta artifacts/
-# GitHub Actions se encarga de ponerlos ahí con 'dvc pull' antes de este paso.
+# Copiar el script de entrada y darle permisos
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
-# Exponer el puerto de Streamlit
+# Puerto de Streamlit
 EXPOSE 8501
 
-# Chequeo de salud (Opcional, ayuda a AWS a saber si la app vive)
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
+# --- EL CAMBIO CLAVE ---
+# Usamos el script como Entrypoint. 
+# Esto significa que cada vez que arranque, ejecutará entrypoint.sh primero
+ENTRYPOINT ["./entrypoint.sh"]
 
-# Comando de arranque
+# El comando final que ejecutará el entrypoint
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

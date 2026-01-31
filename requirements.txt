@@ -5,3 +5,7 @@ nltk
 streamlit
 boto3
 python-dotenv
+fastapi 
+uvicorn
+mlflow>=2.3.0
+dagshub
