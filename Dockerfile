@@ -5,36 +5,31 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1. Instalar herramientas del sistema
-# Agregamos 'wget' para poder descargar el instalador de DVC
+# 1. Instalar git (DVC lo necesita)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. INSTALACIÓN DE DVC AISLADA (La Clave del Éxito)
-# Bajamos el paquete oficial y lo instalamos. 
-# Esto incluye sus propias librerías y NO se pelea con boto3/mlflow.
-RUN wget -qO dvc.deb https://dvc.org/download/linux-deb/dvc.deb && \
-    apt-get install -y ./dvc.deb && \
-    rm dvc.deb
-
-# 3. Instalar TUS dependencias de Python
-# Como DVC ya está instalado por fuera, pip instala boto3/mlflow rápido y sin errores.
+# 2. Copiar requirements PRIMERO (para aprovechar cache de Docker)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# 3. Instalar DVC + tus dependencias EN UNA SOLA CAPA
+# Esto evita conflictos de versiones
+RUN pip install --no-cache-dir \
+    "dvc[s3]==3.56.0" \
+    -r requirements.txt
 
 # 4. Copiar código
 COPY . .
 
-# 5. Inicializar Git falso (Necesario para que DVC corra en Docker)
+# 5. Configurar Git (DVC lo requiere)
 RUN git init && \
     git config user.email "deploy@render.com" && \
     git config user.name "Render Deploy" && \
     git add . && \
-    git commit -m "Dummy commit for DVC"
+    git commit -m "Init for DVC"
 
-# 6. Permisos y Arranque
+# 6. Permisos
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
