@@ -5,30 +5,36 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Instalar git (necesario para DVC)
+# 1. Instalar herramientas del sistema
+# Agregamos 'wget' para poder descargar el instalador de DVC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
+# 2. INSTALACIÓN DE DVC AISLADA (La Clave del Éxito)
+# Bajamos el paquete oficial y lo instalamos. 
+# Esto incluye sus propias librerías y NO se pelea con boto3/mlflow.
+RUN wget -qO dvc.deb https://dvc.org/download/linux-deb/dvc.deb && \
+    apt-get install -y ./dvc.deb && \
+    rm dvc.deb
+
+# 3. Instalar TUS dependencias de Python
+# Como DVC ya está instalado por fuera, pip instala boto3/mlflow rápido y sin errores.
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# --- CORRECCIÓN DE DEPENDENCIAS ---
-# Instalamos dvc[s3] Y los requirements AL MISMO TIEMPO.
-# Esto permite que pip resuelva el conflicto de versiones de botocore automáticamente.
-RUN pip install --no-cache-dir "dvc[s3]" -r requirements.txt
-
+# 4. Copiar código
 COPY . .
 
-# --- CORRECCIÓN DEL ERROR "NOT A GIT REPOSITORY" ---
-# Inicializamos un git vacío DENTRO de la imagen para que DVC no falle.
-# No necesitamos la historia, solo la estructura .git
+# 5. Inicializar Git falso (Necesario para que DVC corra en Docker)
 RUN git init && \
-    git config user.email "you@example.com" && \
-    git config user.name "Your Name" && \
+    git config user.email "deploy@render.com" && \
+    git config user.name "Render Deploy" && \
     git add . && \
     git commit -m "Dummy commit for DVC"
 
-# Preparar script de arranque
+# 6. Permisos y Arranque
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
