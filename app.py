@@ -2,86 +2,100 @@
 import streamlit as st
 import requests
 import os
+import logging
 from dotenv import load_dotenv
 
+# Importamos la clase directamente (Monolito Modular)
+# Esto evita tener que levantar un segundo servidor para la API
+from src.pipeline.predict import MovieRecommender
+
 # =========================
-# Cargar variables de entorno
+# Configuración
 # =========================
+# Configurar logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("StreamlitApp")
+
+# Cargar variables (En Render fallará silenciosamente, en local carga .env)
 load_dotenv()
 API_KEY = os.getenv("TMDB_API_KEY")
-
-# URL del microservicio de ML
-# En local: http://localhost:8000/predict
-# En AWS: https://tu-api-ml.com/predict
-ML_API_URL = os.getenv("ML_API_URL", "http://localhost:8000/predict")
 
 # =========================
 # Función para obtener posters
 # =========================
 
+
 def fetch_poster(movie_id):
     if not API_KEY:
+        # Placeholder si no hay API Key
         return "https://via.placeholder.com/500x750?text=ApiKeyMissing"
-    try:
-        url = (
-            f"https://api.themoviedb.org/3/movie/{movie_id}"
-            f"?api_key={API_KEY}&language=en-US"
-        )
-        response = requests.get(url, timeout=5)
-        data = response.json()
-        poster_path = data.get("poster_path")
 
+    try:
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
+        # Timeout para no colgar la app
+        response = requests.get(url, timeout=2)
+
+        if response.status_code != 200:
+            return "https://via.placeholder.com/500x750?text=ErrorAPI"
+
+        data = response.json()
+        poster_path = data.get('poster_path')
         if poster_path:
             return "https://image.tmdb.org/t/p/w500/" + poster_path
-    except Exception:
+
+    except Exception as e:
+        logger.error(f"Error fetching poster for {movie_id}: {e}")
         pass
 
     return "https://via.placeholder.com/500x750?text=No+Image"
 
 # =========================
-# UI Streamlit
+# Carga del Modelo (CRÍTICO PARA RENDER)
 # =========================
-st.title("🎬 Sistema de Recomendación (Microservicios)")
+# Usamos cache_resource para cargar el modelo UNA sola vez en memoria.
+# Si no usas esto, Render explotará por falta de RAM cada vez que des clic.
 
-movie_input = st.text_input("Escribe una película:")
 
-if st.button("Recomendar"):
-    if not movie_input.strip():
-        st.warning(" Escribe el nombre de una película.")
-        st.stop()
+@st.cache_resource
+def load_recommender():
+    return MovieRecommender()
 
-    try:
-        # Llamada al microservicio ML
-        response = requests.post(
-            ML_API_URL,
-            json={"movie_title": movie_input},
-            timeout=10
-        )
 
-        if response.status_code == 200:
-            data = response.json()
+# Intentar cargar la lógica
+try:
+    recommender = load_recommender()
+except Exception as e:
+    st.error(
+        f"Error crítico: No se pudieron cargar los modelos .pkl. \nDetalle: {e}")
+    st.stop()
 
-            names = data.get("recommendations", [])
-            ids = data.get("ids", [])
+# =========================
+# Interfaz Gráfica (UI)
+# =========================
+st.title("Sistema de Recomendación de Películas")
+st.caption("Machine Learning Portfolio | Desplegado en Render")
 
-            if not names:
-                st.error("No se encontraron recomendaciones.")
-                st.stop()
+# Selector de películas (usando la lista cargada del modelo)
+movie_list = recommender.get_movie_list()
+selected_movie = st.selectbox(
+    'Selecciona una película que te guste:',
+    movie_list
+)
 
+if st.button('Obtener Recomendaciones'):
+    if not selected_movie:
+        st.warning("Por favor selecciona una película.")
+    else:
+        with st.spinner('Analizando gustos...'):
+            # Llamada DIRECTA a la clase (sin requests.post)
+            names, ids = recommender.recommend(selected_movie)
+
+        if names:
             cols = st.columns(5)
             for i, col in enumerate(cols):
                 if i < len(names):
                     with col:
-                        st.text(names[i])
-                        st.image(fetch_poster(ids[i]))
-
+                        st.image(fetch_poster(ids[i]), use_column_width=True)
+                        st.caption(names[i])
         else:
-            st.error("❌ La API de recomendación falló.")
-
-    except requests.exceptions.ConnectionError:
-        st.error(
-            " No se puede conectar con el Servicio de Inteligencia Artificial.\n\n"
-            "¿Está levantado el backend ML?"
-        )
-    except requests.exceptions.Timeout:
-        st.error(" El servicio de ML tardó demasiado en responder.")
+            st.warning("No se encontraron recomendaciones para esta película.")
