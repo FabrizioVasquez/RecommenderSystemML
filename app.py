@@ -73,7 +73,7 @@ except Exception as e:
 # Interfaz Gráfica (UI)
 # =========================
 st.title("Sistema de Recomendación de Películas")
-st.caption("Machine Learning Portfolio | Desplegado en Render")
+st.caption("Machine Learning Portfolio")
 
 # Selector de películas (usando la lista cargada del modelo)
 movie_list = recommender.get_movie_list()
